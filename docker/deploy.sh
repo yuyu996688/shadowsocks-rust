@@ -6,8 +6,8 @@
 set -e
 
 # ---------- 固定配置 -----------
-SERVER_IMAGE="ghcr.io/shadowsocks/ssserver-rust:latest"
-CLIENT_IMAGE="ghcr.io/shadowsocks/sslocal-rust:latest"
+SERVER_IMAGE="yuyu8868/ssserver-rust:latest"
+CLIENT_IMAGE="yuyu8868/sslocal-rust:latest"
 SERVER_CONTAINER="ssr-server-rust"
 CLIENT_CONTAINER="ssr-local-rust"
 RUN_USER="65534:65534"
