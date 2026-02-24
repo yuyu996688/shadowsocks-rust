@@ -34,6 +34,35 @@ need_root() {
   fi
 }
 
+# 拉取镜像（若本地已有则跳过；否则带重试，避免 ghcr.io 连接超时）
+PULL_RETRIES="${PULL_RETRIES:-3}"
+PULL_RETRY_DELAY="${PULL_RETRY_DELAY:-5}"
+safe_pull() {
+  local img="$1" i=1
+  if docker image inspect "$img" &>/dev/null; then
+    echo ">>> 镜像已存在，跳过拉取: $img"
+    return 0
+  fi
+  while true; do
+    echo ">>> 拉取镜像 (尝试 $i/$PULL_RETRIES): $img"
+    if docker pull "$img"; then
+      return 0
+    fi
+    if [[ $i -ge PULL_RETRIES ]]; then
+      echo ""
+      echo "拉取失败（多为网络无法访问 ghcr.io 或超时）。可尝试："
+      echo "  1) 配置系统或 Docker 代理后再执行本脚本"
+      echo "  2) 在 /etc/docker/daemon.json 中增加: \"max-concurrent-downloads\": 1，然后 systemctl restart docker"
+      echo "  3) 在能访问 ghcr.io 的机器上执行: docker pull $img && docker save -o xxx.tar $img"
+      echo "     拷贝 xxx.tar 到本机后: docker load -i xxx.tar，再重新执行安装（安装时不会再次拉取）"
+      exit 1
+    fi
+    echo ">>> 等待 ${PULL_RETRY_DELAY} 秒后重试..."
+    sleep "$PULL_RETRY_DELAY"
+    i=$((i + 1))
+  done
+}
+
 ensure_dirs() {
   mkdir -p "$CONF_DIR" "$LOG_DIR"
   chown "$RUN_USER" "$LOG_DIR" 2>/dev/null || true
@@ -117,8 +146,7 @@ install_server() {
   SS_PASSWORD="$(gen_password)"
   echo ">>> 已随机生成密钥，安装完成后会显示，请妥善保存。"
 
-  echo ">>> 拉取服务端镜像: $SERVER_IMAGE"
-  docker pull "$SERVER_IMAGE"
+  safe_pull "$SERVER_IMAGE"
   ensure_dirs
   mkdir -p "$CONF_DIR"
   cat > "${CONF_DIR}/config.json" << EOF
@@ -175,8 +203,7 @@ install_client() {
 EOF
     echo ">>> 已生成 ${CONF_DIR}/config.json"
   fi
-  echo ">>> 拉取客户端镜像: $CLIENT_IMAGE"
-  docker pull "$CLIENT_IMAGE"
+  safe_pull "$CLIENT_IMAGE"
   docker run \
     --name "$CLIENT_CONTAINER" \
     --restart always \
@@ -235,7 +262,7 @@ do_update() {
   choose_mode
   load_state
   if [[ "$MODE" == "server" ]]; then
-    docker pull "$SERVER_IMAGE"
+    safe_pull "$SERVER_IMAGE"
     docker stop "$SERVER_CONTAINER" 2>/dev/null || true
     docker rm "$SERVER_CONTAINER" 2>/dev/null || true
     ensure_dirs
@@ -249,7 +276,7 @@ do_update() {
       -dit "$SERVER_IMAGE"
     echo ">>> 服务端已更新并启动。"
   else
-    docker pull "$CLIENT_IMAGE"
+    safe_pull "$CLIENT_IMAGE"
     docker stop "$CLIENT_CONTAINER" 2>/dev/null || true
     docker rm "$CLIENT_CONTAINER" 2>/dev/null || true
     ensure_dirs
