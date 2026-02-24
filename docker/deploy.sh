@@ -5,9 +5,18 @@
 
 set -e
 
+# ---------- 按架构选择镜像 (arm64 / amd64) -----------
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64|amd64)  DOCKER_ARCH="amd64" ;;
+  aarch64|arm64) DOCKER_ARCH="arm64" ;;
+  *)             echo "不支持的架构: $ARCH，仅支持 x86_64/amd64 或 aarch64/arm64"; exit 1 ;;
+esac
+echo ">>> 检测到架构: $ARCH，使用镜像标签: latest-${DOCKER_ARCH}"
+
 # ---------- 固定配置 -----------
-SERVER_IMAGE="yuyu8868/ssserver-rust:latest"
-CLIENT_IMAGE="yuyu8868/sslocal-rust:latest"
+SERVER_IMAGE="yuyu8868/ssserver-rust:latest-${DOCKER_ARCH}"
+CLIENT_IMAGE="yuyu8868/sslocal-rust:latest-${DOCKER_ARCH}"
 SERVER_CONTAINER="ssr-server-rust"
 CLIENT_CONTAINER="ssr-local-rust"
 RUN_USER="65534:65534"
